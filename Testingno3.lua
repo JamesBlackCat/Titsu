@@ -13,6 +13,26 @@ local RunService       = game:GetService("RunService")
 local UserInputService = game:GetService("UserInputService")
 local TweenService     = game:GetService("TweenService")
 local HttpService      = game:GetService("HttpService")
+
+-- Compatibility shims for executor runtimes that lag behind the current
+-- Roblox Luau API. These are used before the UI is created, so a missing
+-- helper would otherwise stop the entire script during startup.
+if type(math.clamp) ~= "function" then
+    function math.clamp(value, minValue, maxValue)
+        value = tonumber(value) or 0
+        minValue = tonumber(minValue) or 0
+        maxValue = tonumber(maxValue) or 1
+        if minValue > maxValue then minValue, maxValue = maxValue, minValue end
+        return math.max(minValue, math.min(maxValue, value))
+    end
+end
+
+if type(task) == "table"
+and type(task.defer) ~= "function"
+and type(task.spawn) == "function" then
+    task.defer = task.spawn
+end
+
 local Camera
 repeat
     Camera = workspace.CurrentCamera
