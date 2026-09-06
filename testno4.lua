@@ -4412,7 +4412,6 @@ saveState.refreshSaveRows = function()
             COLORS.text, Enum.Font.GothamSemibold)
         label.Position = UDim2.new(0, 12, 0, 0)
         label.TextSize = 11
-        label.TextTruncate = Enum.TextTruncate.AtEnd
 
         local loadButton = Instance.new("TextButton")
         loadButton.Size = UDim2.new(0, 60, 0, 28)
