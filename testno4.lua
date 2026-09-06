@@ -3333,6 +3333,7 @@ end)
 -- ── Inline orb setup controls ─────────────────────────────────
 -- These controls stay on the play screen while placement is active, so the
 -- user does not have to reopen the panel between every orb action.
+do
 local orbQuickBar = Instance.new("Frame")
 orbQuickBar.Name = "OrbQuickBar"
 orbQuickBar.AnchorPoint = Vector2.new(0.5, 1)
@@ -3431,18 +3432,23 @@ end
 makeHoldFloatButton("FloatForward", "FORWARD", "forwardHeld")
 makeHoldFloatButton("FloatBackward", "BACKWARD", "backwardHeld")
 
+OrbSystem.quickBar = orbQuickBar
+OrbSystem.floatQuickBar = floatQuickBar
+OrbSystem.quickButtons = orbQuickButtons
+end
+
 local function refreshOrbQuickBar()
-    orbQuickBar.Visible = OrbSystem.setupActive and S.orbEnabled == true
-    floatQuickBar.Visible = OrbSystem.setupActive
+    OrbSystem.quickBar.Visible = OrbSystem.setupActive and S.orbEnabled == true
+    OrbSystem.floatQuickBar.Visible = OrbSystem.setupActive
         and OrbSystem.floatMode == true and S.orbEnabled == true
     local hasPreview = #OrbSystem.preview > 0
-    orbQuickButtons.UndoOrb.Active = hasPreview
-    orbQuickButtons.UndoOrb.AutoButtonColor = hasPreview
-    orbQuickButtons.SetOrbs.Active = hasPreview
-    orbQuickButtons.SetOrbs.AutoButtonColor = hasPreview
-    orbQuickButtons.UndoOrb.BackgroundColor3 = hasPreview
+    OrbSystem.quickButtons.UndoOrb.Active = hasPreview
+    OrbSystem.quickButtons.UndoOrb.AutoButtonColor = hasPreview
+    OrbSystem.quickButtons.SetOrbs.Active = hasPreview
+    OrbSystem.quickButtons.SetOrbs.AutoButtonColor = hasPreview
+    OrbSystem.quickButtons.UndoOrb.BackgroundColor3 = hasPreview
         and COLORS.warning or COLORS.border
-    orbQuickButtons.SetOrbs.BackgroundColor3 = hasPreview
+    OrbSystem.quickButtons.SetOrbs.BackgroundColor3 = hasPreview
         and COLORS.good or COLORS.border
 end
 
@@ -4148,10 +4154,12 @@ end
 -- Snapshots contain the complete settings table, including normalized
 -- crosshair and button positions, but never copy OrbSystem.saved/preview.
 -- Orb rigs are runtime objects; loading a setup must not recreate them.
-local savedSetups = {}
-local nextSetupId = 1
+local saveState = {
+    savedSetups = {},
+    nextSetupId = 1,
+}
 
-local function cloneSetupValue(value)
+function saveState.cloneSetupValue(value)
     local valueType = typeof(value)
     if valueType == "UDim2" then
         return UDim2.new(value.X.Scale, value.X.Offset, value.Y.Scale, value.Y.Offset)
@@ -4163,20 +4171,20 @@ local function cloneSetupValue(value)
 
     local result = {}
     for key, item in pairs(value) do
-        result[key] = cloneSetupValue(item)
+        result[key] = saveState.cloneSetupValue(item)
     end
     return result
 end
 
-local function captureSetup()
+function saveState.captureSetup()
     local snapshot = {}
     for key, value in pairs(S) do
-        snapshot[key] = cloneSetupValue(value)
+        snapshot[key] = saveState.cloneSetupValue(value)
     end
     return snapshot
 end
 
-local function refreshAfterLoad()
+function saveState.refreshAfterLoad()
     if not S.orbEnabled then cancelOrbSetup() end
     applyCrosshairPosition(S.aimlockCrosshairPos)
     syncCrosshairShape()
@@ -4194,29 +4202,29 @@ local function refreshAfterLoad()
     end
 end
 
-local function saveSetup(name)
+function saveState.saveSetup(name)
     name = tostring(name or ""):gsub("^%s+", ""):gsub("%s+$", "")
     if name == "" then return false end
-    local id = "setup-" .. tostring(nextSetupId)
-    nextSetupId = nextSetupId + 1
-    table.insert(savedSetups, {
+    local id = "setup-" .. tostring(saveState.nextSetupId)
+    saveState.nextSetupId = saveState.nextSetupId + 1
+    table.insert(saveState.savedSetups, {
         id = id,
         name = name,
-        values = captureSetup(),
+        values = saveState.captureSetup(),
     })
     return true
 end
 
-local function loadSetup(entry)
+function saveState.loadSetup(entry)
     if not entry or not entry.values then return false end
     for key, value in pairs(entry.values) do
-        S[key] = cloneSetupValue(value)
+        S[key] = saveState.cloneSetupValue(value)
     end
-    refreshAfterLoad()
+    saveState.refreshAfterLoad()
     return true
 end
 
-local function renameSetup(entry, name)
+function saveState.renameSetup(entry, name)
     name = tostring(name or ""):gsub("^%s+", ""):gsub("%s+$", "")
     if not entry or name == "" then return false end
     entry.name = name
@@ -4224,9 +4232,6 @@ local function renameSetup(entry, name)
 end
 
 local savePage
-local saveList
-local refreshSaveRows
-local savePopup
 
 local function setModePage(id)
     if navButtons[id] then navButtons[id]:Activate() end
@@ -4244,64 +4249,64 @@ local configPage = createPage("Settings", "SETTINGS")
 savePage = createPage("SaveLoad", "SAVE / LOAD")
 
 addSection(savePage, "Create setup")
-local createSaveCard = addCard(savePage, 66)
-local saveNameBox = Instance.new("TextBox")
-saveNameBox.Size = UDim2.new(1, -76, 0, 34)
-saveNameBox.Position = UDim2.new(0, 10, 0.5, -17)
-saveNameBox.BackgroundColor3 = COLORS.panelAlt
-saveNameBox.BorderSizePixel = 0
-saveNameBox.Text = ""
-saveNameBox.PlaceholderText = "Name this setup"
-saveNameBox.TextColor3 = COLORS.text
-saveNameBox.PlaceholderColor3 = COLORS.muted
-saveNameBox.TextSize = 11
-saveNameBox.Font = Enum.Font.GothamSemibold
-saveNameBox.ClearTextOnFocus = false
-saveNameBox.TextXAlignment = Enum.TextXAlignment.Left
-saveNameBox.Parent = createSaveCard
-addCorner(saveNameBox, 8)
-local saveNamePadding = Instance.new("UIPadding")
-saveNamePadding.PaddingLeft = UDim.new(0, 10)
-saveNamePadding.Parent = saveNameBox
+saveState.createSaveCard = addCard(savePage, 66)
+saveState.saveNameBox = Instance.new("TextBox")
+saveState.saveNameBox.Size = UDim2.new(1, -76, 0, 34)
+saveState.saveNameBox.Position = UDim2.new(0, 10, 0.5, -17)
+saveState.saveNameBox.BackgroundColor3 = COLORS.panelAlt
+saveState.saveNameBox.BorderSizePixel = 0
+saveState.saveNameBox.Text = ""
+saveState.saveNameBox.PlaceholderText = "Name this setup"
+saveState.saveNameBox.TextColor3 = COLORS.text
+saveState.saveNameBox.PlaceholderColor3 = COLORS.muted
+saveState.saveNameBox.TextSize = 11
+saveState.saveNameBox.Font = Enum.Font.GothamSemibold
+saveState.saveNameBox.ClearTextOnFocus = false
+saveState.saveNameBox.TextXAlignment = Enum.TextXAlignment.Left
+saveState.saveNameBox.Parent = saveState.createSaveCard
+addCorner(saveState.saveNameBox, 8)
+saveState.saveNamePadding = Instance.new("UIPadding")
+saveState.saveNamePadding.PaddingLeft = UDim.new(0, 10)
+saveState.saveNamePadding.Parent = saveState.saveNameBox
 
-local createSaveButton = Instance.new("TextButton")
-createSaveButton.Size = UDim2.new(0, 48, 0, 34)
-createSaveButton.Position = UDim2.new(1, -58, 0.5, -17)
-createSaveButton.BackgroundColor3 = COLORS.good
-createSaveButton.BorderSizePixel = 0
-createSaveButton.Text = "+"
-createSaveButton.TextColor3 = COLORS.background
-createSaveButton.TextSize = 24
-createSaveButton.Font = Enum.Font.GothamBold
-createSaveButton.AutoButtonColor = false
-createSaveButton.Parent = createSaveCard
-addCorner(createSaveButton, 8)
+saveState.createSaveButton = Instance.new("TextButton")
+saveState.createSaveButton.Size = UDim2.new(0, 48, 0, 34)
+saveState.createSaveButton.Position = UDim2.new(1, -58, 0.5, -17)
+saveState.createSaveButton.BackgroundColor3 = COLORS.good
+saveState.createSaveButton.BorderSizePixel = 0
+saveState.createSaveButton.Text = "+"
+saveState.createSaveButton.TextColor3 = COLORS.background
+saveState.createSaveButton.TextSize = 24
+saveState.createSaveButton.Font = Enum.Font.GothamBold
+saveState.createSaveButton.AutoButtonColor = false
+saveState.createSaveButton.Parent = saveState.createSaveCard
+addCorner(saveState.createSaveButton, 8)
 
-local saveStatus = makeLabel(savePage, "No setups saved yet",
+saveState.status = makeLabel(savePage, "No setups saved yet",
     UDim2.new(1, -8, 0, 22), COLORS.muted, Enum.Font.Gotham)
-saveStatus.TextSize = 10
-saveStatus.LayoutOrder = nextLayoutOrder(savePage)
+saveState.status.TextSize = 10
+saveState.status.LayoutOrder = nextLayoutOrder(savePage)
 
-saveList = Instance.new("ScrollingFrame")
-saveList.Name = "SavedSetupList"
-saveList.Size = UDim2.new(1, -8, 0, 300)
-saveList.BackgroundTransparency = 1
-saveList.BorderSizePixel = 0
-saveList.ScrollBarThickness = 3
-saveList.ScrollBarImageColor3 = COLORS.accentDark
-saveList.AutomaticCanvasSize = Enum.AutomaticSize.Y
-saveList.CanvasSize = UDim2.new(0, 0, 0, 0)
-saveList.LayoutOrder = nextLayoutOrder(savePage)
-saveList.Parent = savePage
-local saveListLayout = Instance.new("UIListLayout")
-saveListLayout.Padding = UDim.new(0, 6)
-saveListLayout.SortOrder = Enum.SortOrder.LayoutOrder
-saveListLayout.Parent = saveList
+saveState.list = Instance.new("ScrollingFrame")
+saveState.list.Name = "SavedSetupList"
+saveState.list.Size = UDim2.new(1, -8, 0, 300)
+saveState.list.BackgroundTransparency = 1
+saveState.list.BorderSizePixel = 0
+saveState.list.ScrollBarThickness = 3
+saveState.list.ScrollBarImageColor3 = COLORS.accentDark
+saveState.list.AutomaticCanvasSize = Enum.AutomaticSize.Y
+saveState.list.CanvasSize = UDim2.new(0, 0, 0, 0)
+saveState.list.LayoutOrder = nextLayoutOrder(savePage)
+saveState.list.Parent = savePage
+saveState.listLayout = Instance.new("UIListLayout")
+saveState.listLayout.Padding = UDim.new(0, 6)
+saveState.listLayout.SortOrder = Enum.SortOrder.LayoutOrder
+saveState.listLayout.Parent = saveState.list
 
 local function closeSavePopup()
-    if savePopup then
-        savePopup:Destroy()
-        savePopup = nil
+    if saveState.popup then
+        saveState.popup:Destroy()
+        saveState.popup = nil
     end
 end
 
@@ -4318,7 +4323,7 @@ local function openSavePopup(entry)
     popup.Parent = ControlGui
     addCorner(popup, 10)
     addStroke(popup, COLORS.accentDark, 1)
-    savePopup = popup
+    saveState.popup = popup
 
     local titleLabel = makeLabel(popup, "EDIT SETUP", UDim2.new(1, -24, 0, 24),
         COLORS.accent, Enum.Font.GothamBold)
@@ -4362,43 +4367,44 @@ local function openSavePopup(entry)
     end
 
     popupButton("RENAME", 12, COLORS.accentDark, function()
-        if renameSetup(entry, renameBox.Text) then
-            saveStatus.Text = "Renamed setup: " .. entry.name
-            refreshSaveRows()
+        if saveState.renameSetup(entry, renameBox.Text) then
+            saveState.status.Text = "Renamed setup: " .. entry.name
+            saveState.refreshSaveRows()
         end
         closeSavePopup()
     end)
     popupButton("DELETE", 108, COLORS.danger, function()
-        for index, candidate in ipairs(savedSetups) do
+        for index, candidate in ipairs(saveState.savedSetups) do
             if candidate == entry then
-                table.remove(savedSetups, index)
+                table.remove(saveState.savedSetups, index)
                 break
             end
         end
-        saveStatus.Text = "Setup deleted"
-        refreshSaveRows()
+        saveState.status.Text = "Setup deleted"
+        saveState.refreshSaveRows()
         closeSavePopup()
     end)
     popupButton("CANCEL", 204, COLORS.border, closeSavePopup)
 end
 
-refreshSaveRows = function()
-    for _, child in ipairs(saveList:GetChildren()) do
+saveState.refreshSaveRows = function()
+    for _, child in ipairs(saveState.list:GetChildren()) do
         if child:IsA("Frame") then child:Destroy() end
     end
 
-    saveStatus.Text = #savedSetups == 0
+    saveState.status.Text = #saveState.savedSetups == 0
         and "No setups saved yet"
-        or (tostring(#savedSetups) .. " saved setup" .. (#savedSetups == 1 and "" or "s"))
+        or (tostring(#saveState.savedSetups) .. " saved setup"
+            .. (#saveState.savedSetups == 1 and "" or "s"))
 
-    for index, entry in ipairs(savedSetups) do
+    for index, entry in ipairs(saveState.savedSetups) do
         local row = Instance.new("Frame")
         row.Name = entry.id
         row.Size = UDim2.new(1, -4, 0, 48)
         row.BackgroundColor3 = COLORS.panel
         row.BorderSizePixel = 0
         row.LayoutOrder = index
-        row.Parent = saveList
+        row.Parent = saveState.list
         addCorner(row, 8)
         addStroke(row, COLORS.border, 1, 0.35)
 
@@ -4421,8 +4427,8 @@ refreshSaveRows = function()
         loadButton.Parent = row
         addCorner(loadButton, 6)
         loadButton.Activated:Connect(function()
-            if loadSetup(entry) then
-                saveStatus.Text = "Loaded setup: " .. entry.name
+            if saveState.loadSetup(entry) then
+                saveState.status.Text = "Loaded setup: " .. entry.name
             end
         end)
 
@@ -4442,16 +4448,16 @@ refreshSaveRows = function()
     end
 end
 
-createSaveButton.Activated:Connect(function()
-    if saveSetup(saveNameBox.Text) then
-        saveStatus.Text = "Saved setup: " .. saveNameBox.Text
-        saveNameBox.Text = ""
-        refreshSaveRows()
+saveState.createSaveButton.Activated:Connect(function()
+    if saveState.saveSetup(saveState.saveNameBox.Text) then
+        saveState.status.Text = "Saved setup: " .. saveState.saveNameBox.Text
+        saveState.saveNameBox.Text = ""
+        saveState.refreshSaveRows()
     else
-        saveStatus.Text = "Enter a name before saving"
+        saveState.status.Text = "Enter a name before saving"
     end
 end)
-refreshSaveRows()
+saveState.refreshSaveRows()
 
 addSection(controlPage, "Session control")
 addToggle(controlPage, "Enable aimlock", S.aimlockEnabled, function(v) setAimlock(v) end,
@@ -4977,7 +4983,9 @@ end)
 
 -- Start on the control page.  The panel is visible by default so the
 -- placement workflow is discoverable immediately after the script loads.
-for _, entry in pairs(pages) do entry.page.Visible = false end
+(function()
+    for _, entry in pairs(pages) do entry.page.Visible = false end
+end)()
 pages.Control.page.Visible = true
 navButtons.Control.BackgroundColor3 = COLORS.accentDark
 navButtons.Control.TextColor3 = COLORS.text
