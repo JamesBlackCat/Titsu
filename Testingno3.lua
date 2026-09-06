@@ -13,9 +13,26 @@ local RunService       = game:GetService("RunService")
 local UserInputService = game:GetService("UserInputService")
 local TweenService     = game:GetService("TweenService")
 local HttpService      = game:GetService("HttpService")
-local Camera           = workspace.CurrentCamera
+local Camera
+repeat
+    Camera = workspace.CurrentCamera
+    if not Camera then task.wait() end
+until Camera
 
 local LocalPlayer = Players.LocalPlayer
+if not LocalPlayer then
+    Players:GetPropertyChangedSignal("LocalPlayer"):Wait()
+    LocalPlayer = Players.LocalPlayer
+end
+
+-- Roblox can replace CurrentCamera when the player respawns or the camera
+-- controller changes. Keep all of the helpers below pointed at the active
+-- camera instead of the one that happened to exist during startup.
+workspace:GetPropertyChangedSignal("CurrentCamera"):Connect(function()
+    if workspace.CurrentCamera then
+        Camera = workspace.CurrentCamera
+    end
+end)
 local function getCharParts()
     local char = LocalPlayer.Character
     if not char then return nil, nil, nil, nil end
@@ -580,7 +597,8 @@ local Aimlock = {
 -- ── List helpers ──────────────────────────────────────────────
 local function isOnLockList(entity)
     if not entity then return false end
-    return S.targetLockList[string.lower(entity.Name)] == true
+    return S.targetLockEnabled == true
+        and S.targetLockList[string.lower(entity.Name)] == true
 end
 
 local function isOnIgnoreList(entity)
@@ -796,7 +814,13 @@ end
 
 local function getTargetFOVRadius()
     return math.clamp(
-        S.aimlockFOVRingSize or S.aimlockFOV or 200, 1, 350)
+        tonumber(S.aimlockFOV) or 200, 1, 800)
+end
+
+local function getVisualFOVRadius()
+    return math.clamp(
+        tonumber(S.aimlockFOVRingSize) or tonumber(S.aimlockFOV) or 200,
+        1, 350)
 end
 
 local function isInsideTargetFOV(part, cross)
@@ -1564,7 +1588,7 @@ local function makeCrosshairGui()
     ring.Name              = "FOVRing"
     ring.AnchorPoint       = Vector2.new(0.5, 0.5)
     ring.Position          = S.aimlockCrosshairPos
-    local ringRadius = getTargetFOVRadius()
+    local ringRadius = getVisualFOVRadius()
     ring.Size              = UDim2.new(0, ringRadius * 2, 0, ringRadius * 2)
     ring.BackgroundTransparency = 1
     ring.BorderSizePixel   = 0
@@ -1717,7 +1741,7 @@ RunService:BindToRenderStep("FlyAimlock", Enum.RenderPriority.Camera.Value + 2, 
     if Aimlock.fovCircle then
         Aimlock.fovCircle.Visible  = S.aimlockShowFOV == true
         Aimlock.fovCircle.Position = pos
-        local ringRadius = getTargetFOVRadius()
+        local ringRadius = getVisualFOVRadius()
         Aimlock.fovCircle.Size     = UDim2.new(0, ringRadius * 2, 0, ringRadius * 2)
         if Aimlock.fovStroke then
             Aimlock.fovStroke.Color = Color3.fromRGB(
@@ -4263,7 +4287,8 @@ addToggle(orbPage, "Float mode", OrbSystem.floatMode, function(v)
     if floatActionRow then floatActionRow.Visible = v end
     if updateOrbToolbarState then updateOrbToolbarState() end
 end, "Preview follows the crosshair from near the player")
-local floatActionRow = addActionRow(orbPage, {
+local floatActionRow
+floatActionRow = addActionRow(orbPage, {
     { label = "FORWARD (HOLD)", color = COLORS.accentDark, callback = function() end },
     { label = "BACKWARD (HOLD)", color = COLORS.accentDark, callback = function() end },
 })
