@@ -4154,6 +4154,17 @@ end
 -- Snapshots contain the complete settings table, including normalized
 -- crosshair and button positions, but never copy OrbSystem.saved/preview.
 -- Orb rigs are runtime objects; loading a setup must not recreate them.
+local controlPage = createPage("Control", "CONTROL")
+local orbPage = createPage("OrbMarks", "ORB MARKS")
+local targetPage = createPage("Targeting", "TARGETING")
+local behaviourPage = createPage("Behaviour", "BEHAVIOUR")
+local visualPage = createPage("Visuals", "VISUALS")
+local rotationPage = createPage("Rotation", "ROTATION")
+local lockPage = createPage("LockList", "LOCK LIST")
+local keybindPage = createPage("Keybinds", "KEYBINDS")
+local configPage = createPage("Settings", "SETTINGS")
+
+if false then
 local saveState = {
     savedSetups = {},
     nextSetupId = 1,
@@ -4457,6 +4468,7 @@ saveState.createSaveButton.Activated:Connect(function()
     end
 end)
 saveState.refreshSaveRows()
+end
 
 addSection(controlPage, "Session control")
 addToggle(controlPage, "Enable aimlock", S.aimlockEnabled, function(v) setAimlock(v) end,
